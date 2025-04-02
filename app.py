@@ -6,6 +6,8 @@ import nltk
 from dotenv import load_dotenv
 import os
 
+
+from helpers import clean_lyrics
 load_dotenv()
 
 GENIUS_API_KEY = os.getenv('GENIUS_API_KEY')
@@ -32,7 +34,7 @@ def index():
         
         result = {
             "song": song_title,
-            "lyrics": lyrics,
+            "lyrics": clean_lyrics(lyrics),
             "mood": "Positive" if sentiment_scores["compound"] > 0 else "Negative",
             "score": sentiment_scores
         }
