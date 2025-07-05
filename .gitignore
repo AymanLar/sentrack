@@ -2,3 +2,5 @@
 .env
 Pipfile.lock
 Pipfile
+DEVELOPMENT.md
+__pycache__
