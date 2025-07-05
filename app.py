@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 
 
-from helpers import clean_lyrics
+from helpers import clean_lyrics, analyze_lyrics_detailed
 load_dotenv()
 
 GENIUS_API_KEY = os.getenv('GENIUS_API_KEY')
@@ -30,14 +30,27 @@ def index():
     if request.method == "POST":
         song_title = request.form.get("song", "").strip()
         lyrics = get_lyrics(song_title)
-        sentiment_scores = sia.polarity_scores(lyrics)
         
-        result = {
-            "song": song_title,
-            "lyrics": clean_lyrics(lyrics),
-            "mood": "Positive" if sentiment_scores["compound"] > 0 else "Negative",
-            "score": sentiment_scores
-        }
+        if lyrics:
+            # Use the new detailed analysis
+            detailed_analysis = analyze_lyrics_detailed(lyrics, sia)
+            
+            result = {
+                "song": song_title,
+                "lyrics": clean_lyrics(lyrics),
+                "colored_lyrics": detailed_analysis['colored_lyrics'],
+                "overall_mood": "Positive" if detailed_analysis['overall_sentiment']["compound"] > 0 else "Negative",
+                "overall_score": detailed_analysis['overall_sentiment'],
+                "sections": detailed_analysis['sections'],
+                "found": True
+            }
+        else:
+            result = {
+                "song": song_title,
+                "found": False,
+                "error": "Song not found or lyrics unavailable"
+            }
+        
         return jsonify(result)
 
     return render_template("index.html")

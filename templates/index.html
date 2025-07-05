@@ -15,17 +15,32 @@
         <button type="submit" class="px-4 py-2 bg-blue-600 rounded">Analyze</button>
     </form>
 
-    <div class="flex w-full max-w-4xl gap-4">
+    <div class="flex w-full max-w-6xl gap-4">
         <!-- Lyrics Section -->
         <div id="lyrics" class="w-1/2 bg-gray-800 p-4 rounded-lg">
-            <h2 class="text-lg font-bold mb-2">Lyrics</h2>
+            <h2 class="text-lg font-bold mb-2">Lyrics with Sentiment Analysis</h2>
             <p class="text-gray-300">Lyrics will appear here...</p>
         </div>
 
-        <!-- Graph Section -->
-        <div id="chart-container" class="w-1/2 bg-gray-800 p-4 rounded-lg">
-            <h2 class="text-lg font-bold mb-2">Sentiment Analysis</h2>
-            <canvas id="sentimentChart"></canvas>
+        <!-- Analysis Section -->
+        <div class="w-1/2 space-y-4">
+            <!-- Overall Sentiment -->
+            <div id="overall-sentiment" class="bg-gray-800 p-4 rounded-lg">
+                <h2 class="text-lg font-bold mb-2">Overall Sentiment</h2>
+                <p class="text-gray-300">Overall analysis will appear here...</p>
+            </div>
+
+            <!-- Section Analysis -->
+            <div id="section-analysis" class="bg-gray-800 p-4 rounded-lg">
+                <h2 class="text-lg font-bold mb-2">Section-by-Section Analysis</h2>
+                <p class="text-gray-300">Section analysis will appear here...</p>
+            </div>
+
+            <!-- Graph Section -->
+            <div id="chart-container" class="bg-gray-800 p-4 rounded-lg">
+                <h2 class="text-lg font-bold mb-2">Sentiment Breakdown</h2>
+                <canvas id="sentimentChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -36,6 +51,12 @@ document.getElementById("song-form").addEventListener("submit", async function(e
     let songTitle = document.getElementById("song-title").value.trim();
     if (!songTitle) return;
 
+    // Show loading state
+    document.getElementById("lyrics").innerHTML = `
+        <h2 class="text-lg font-bold mb-2">Lyrics with Sentiment Analysis</h2>
+        <p class="text-gray-300">Loading...</p>
+    `;
+
     try {
         let response = await fetch("/", {
             method: "POST",
@@ -45,21 +66,81 @@ document.getElementById("song-form").addEventListener("submit", async function(e
 
         let data = await response.json();
 
-        // Update lyrics
-        document.getElementById("lyrics").innerHTML = `
-            <h2 class="text-lg font-bold mb-2">Lyrics</h2>
-            <p class="text-gray-300 whitespace-pre-wrap">${data.lyrics}</p>
-        `;
-
-        // Check if sentiment analysis data exists
-        if (!data.score) {
-            console.error("No sentiment score found in response!");
+        if (!data.found) {
+            document.getElementById("lyrics").innerHTML = `
+                <h2 class="text-lg font-bold mb-2">Lyrics with Sentiment Analysis</h2>
+                <p class="text-red-400">${data.error}</p>
+            `;
             return;
         }
 
+        // Update lyrics with colored sections
+        document.getElementById("lyrics").innerHTML = `
+            <h2 class="text-lg font-bold mb-2">Lyrics with Sentiment Analysis</h2>
+            <div class="text-sm leading-relaxed">${data.colored_lyrics}</div>
+        `;
+
+        // Update overall sentiment
+        const overallMood = data.overall_mood;
+        const overallScore = data.overall_score;
+        document.getElementById("overall-sentiment").innerHTML = `
+            <h2 class="text-lg font-bold mb-2">Overall Sentiment</h2>
+            <div class="space-y-2">
+                <p class="text-lg font-semibold ${overallMood === 'Positive' ? 'text-green-400' : 'text-red-400'}">
+                    Overall Mood: ${overallMood}
+                </p>
+                <div class="grid grid-cols-3 gap-2 text-sm">
+                    <div class="bg-red-600 p-2 rounded">
+                        <span class="font-semibold">Negative:</span> ${(overallScore.neg * 100).toFixed(1)}%
+                    </div>
+                    <div class="bg-yellow-600 p-2 rounded">
+                        <span class="font-semibold">Neutral:</span> ${(overallScore.neu * 100).toFixed(1)}%
+                    </div>
+                    <div class="bg-green-600 p-2 rounded">
+                        <span class="font-semibold">Positive:</span> ${(overallScore.pos * 100).toFixed(1)}%
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Update section analysis
+        let sectionHtml = '<h2 class="text-lg font-bold mb-2">Section-by-Section Analysis</h2>';
+        if (data.sections && data.sections.length > 0) {
+            sectionHtml += '<div class="space-y-3">';
+            data.sections.forEach((section, index) => {
+                const sentiment = section.sentiment;
+                const mood = sentiment.compound > 0.1 ? 'Positive' : 
+                           sentiment.compound < -0.1 ? 'Negative' : 'Neutral';
+                const moodColor = mood === 'Positive' ? 'text-green-400' : 
+                                mood === 'Negative' ? 'text-red-400' : 'text-yellow-400';
+                
+                sectionHtml += `
+                    <div class="border border-gray-600 p-3 rounded">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-semibold text-blue-400">${section.type.charAt(0).toUpperCase() + section.type.slice(1)} ${index + 1}</span>
+                            <span class="${moodColor} font-semibold">${mood}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mb-2">
+                            <span class="mr-3">Pos: ${(sentiment.pos * 100).toFixed(1)}%</span>
+                            <span class="mr-3">Neu: ${(sentiment.neu * 100).toFixed(1)}%</span>
+                            <span>Neg: ${(sentiment.neg * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="text-sm text-gray-300 max-h-20 overflow-y-auto">
+                            ${section.text.substring(0, 100)}${section.text.length > 100 ? '...' : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            sectionHtml += '</div>';
+        } else {
+            sectionHtml += '<p class="text-gray-300">No sections found</p>';
+        }
+        document.getElementById("section-analysis").innerHTML = sectionHtml;
+
+        // Update chart
         let ctx = document.getElementById('sentimentChart').getContext('2d');
 
-        // **Fix: Check before destroying the old chart**
+        // Check before destroying the old chart
         if (window.sentimentChart && typeof window.sentimentChart.destroy === "function") {
             window.sentimentChart.destroy();
         }
@@ -71,7 +152,7 @@ document.getElementById("song-form").addEventListener("submit", async function(e
                 labels: ['Negative', 'Neutral', 'Positive'],
                 datasets: [{
                     label: 'Sentiment Score',
-                    data: [data.score.neg, data.score.neu, data.score.pos],
+                    data: [overallScore.neg, overallScore.neu, overallScore.pos],
                     backgroundColor: ['#ff4c4c', '#ffd700', '#4caf50']
                 }]
             },
@@ -83,9 +164,12 @@ document.getElementById("song-form").addEventListener("submit", async function(e
             }
         });
 
-
     } catch (error) {
         console.error("Error fetching data:", error);
+        document.getElementById("lyrics").innerHTML = `
+            <h2 class="text-lg font-bold mb-2">Lyrics with Sentiment Analysis</h2>
+            <p class="text-red-400">Error loading data. Please try again.</p>
+        `;
     }
 });
 
